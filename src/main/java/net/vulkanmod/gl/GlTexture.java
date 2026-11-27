@@ -174,7 +174,7 @@ public class GlTexture {
         }
 
         if (src != null)
-            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src, getUnpackLayout(width));
+            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, type, src, getUnpackLayout(width));
     }
 
     private static ByteBuffer getByteBuffer(int width, int height, int formatSize, TextureUploadLayout layout, long pixels) {
@@ -207,7 +207,7 @@ public class GlTexture {
         }
 
         if (src != null)
-            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src, getUnpackLayout(width));
+            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, type, src, getUnpackLayout(width));
     }
 
     public static void compressedTexImage2D(int target, int level, int internalFormat, int width, int height, int border) {
@@ -605,14 +605,19 @@ public class GlTexture {
         vulkanImage.updateTextureSampler(maxLod, samplerFlags);
     }
 
-    private void uploadSubImage(int xOffset, int yOffset, int width, int height, int format, ByteBuffer pixels, TextureUploadLayout layout) {
+    private void uploadSubImage(int xOffset, int yOffset, int width, int height, int format, int type, ByteBuffer pixels, TextureUploadLayout layout) {
         boolean rgba8Image = vulkanImage.format == VK_FORMAT_R8G8B8A8_UNORM || vulkanImage.format == VK_FORMAT_R8G8B8A8_SRGB;
 
         ByteBuffer src;
+        boolean freeSrc = false;
         if (format == GL11.GL_RGB && rgba8Image) {
             src = GlUtil.RGBtoRGBA_buffer(pixels);
+            freeSrc = true;
         } else if (format == GL30.GL_BGRA && rgba8Image) {
             src = GlUtil.BGRAtoRGBA_buffer(pixels);
+            freeSrc = true;
+        } else if (format == GL12.GL_BGR && type == GL12.GL_UNSIGNED_SHORT_5_6_5 && rgba8Image) {
+            src = GlUtil.bgr565ToRgba8_buffer(pixels);
         } else {
             src = pixels;
         }
@@ -620,9 +625,8 @@ public class GlTexture {
         this.vulkanImage.uploadSubTextureAsync(0, width, height, xOffset, yOffset,
                 layout.skipRows(), layout.skipPixels(), layout.rowLength(), src);
 
-        if (src != pixels) {
+        if (freeSrc)
             MemoryUtil.memFree(src);
-        }
     }
 
     static TextureUploadLayout getUnpackLayout(int width) {
