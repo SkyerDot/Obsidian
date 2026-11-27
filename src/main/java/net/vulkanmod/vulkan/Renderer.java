@@ -97,6 +97,7 @@ public class Renderer {
     private ArrayList<Long> imageAvailableSemaphores;
     private ArrayList<Long> renderFinishedSemaphores;
     private ArrayList<Long> inFlightFences;
+    private long flushFence = VK_NULL_HANDLE;
 
     private Framebuffer boundFramebuffer;
     private RenderPass boundRenderPass;
@@ -209,6 +210,10 @@ public class Renderer {
 
             }
 
+            LongBuffer pFlushFence = stack.mallocLong(1);
+            if (vkCreateFence(device, fenceInfo, null, pFlushFence) != VK_SUCCESS)
+                throw new RuntimeException("Failed to create mid-frame flush fence");
+            flushFence = pFlushFence.get(0);
         }
     }
 
@@ -392,16 +397,16 @@ public class Renderer {
 
             submitInfo.pCommandBuffers(stack.pointers(currentCmdBuffer));
 
-            vkResetFences(device, inFlightFences.get(currentFrame));
+            vkResetFences(device, flushFence);
 
             Synchronization.INSTANCE.waitFences();
 
-            if ((vkResult = vkQueueSubmit(DeviceManager.getGraphicsQueue().queue(), submitInfo, inFlightFences.get(currentFrame))) != VK_SUCCESS) {
-                vkResetFences(device, inFlightFences.get(currentFrame));
+            if ((vkResult = vkQueueSubmit(DeviceManager.getGraphicsQueue().queue(), submitInfo, flushFence)) != VK_SUCCESS) {
+                vkResetFences(device, flushFence);
                 throw new RuntimeException("Failed to submit draw command buffer: %s".formatted(VkResult.decode(vkResult)));
             }
 
-            vkWaitForFences(device, inFlightFences.get(currentFrame), true, VUtil.UINT64_MAX);
+            vkWaitForFences(device, flushFence, true, VUtil.UINT64_MAX);
 
             this.beginRenderPass(stack);
         }
@@ -567,6 +572,7 @@ public class Renderer {
             vkDestroySemaphore(device, imageAvailableSemaphores.get(i), null);
             vkDestroySemaphore(device, renderFinishedSemaphores.get(i), null);
         }
+        vkDestroyFence(device, flushFence, null);
     }
 
     public void setBoundFramebuffer(Framebuffer framebuffer) {
