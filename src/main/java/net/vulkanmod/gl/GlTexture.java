@@ -426,10 +426,6 @@ public class GlTexture {
             ptr = pixels;
         }
 
-        Renderer renderer = Renderer.getInstance();
-        if (renderer != null && Renderer.isRecording())
-            renderer.flushCmds();
-
         ImageUtil.downloadTexture(image, ptr);
     }
 
