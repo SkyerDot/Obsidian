@@ -1,13 +1,18 @@
 package net.vulkanmod.vulkan.texture;
 
+import net.vulkanmod.gl.GlUtil;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import net.vulkanmod.vulkan.queue.CommandPool;
 import net.vulkanmod.vulkan.util.VUtil;
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
 
+import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 
 import static org.lwjgl.system.MemoryStack.stackPush;
@@ -35,6 +40,10 @@ public abstract class ImageUtil {
     }
 
     public static void downloadTexture(VulkanImage image, long ptr) {
+        downloadTexture(image, ptr, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE);
+    }
+
+    public static void downloadTexture(VulkanImage image, long ptr, int format, int type) {
         try (MemoryStack stack = stackPush()) {
             int prevLayout = image.getCurrentLayout();
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
@@ -59,7 +68,17 @@ public abstract class ImageUtil {
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
 
             MemoryManager.MapAndCopy(pStagingAllocation.get(0),
-                    (data) -> VUtil.memcpy(data.getByteBuffer(0, (int) imageSize), ptr)
+                    (data) -> {
+                        if (format == GL12.GL_BGR && type == GL12.GL_UNSIGNED_SHORT_5_6_5
+                                && image.format == VK_FORMAT_R8G8B8A8_UNORM) {
+                            int pixels = image.width * image.height;
+                            ByteBuffer src = data.getByteBuffer(0, (int) imageSize);
+                            ByteBuffer dst = MemoryUtil.memByteBuffer(ptr, pixels * 2);
+                            GlUtil.rgba8ToBgr565(src, dst, pixels);
+                        } else {
+                            VUtil.memcpy(data.getByteBuffer(0, (int) imageSize), ptr);
+                        }
+                    }
             );
 
             MemoryManager.freeBuffer(pStagingBuffer.get(0), pStagingAllocation.get(0));

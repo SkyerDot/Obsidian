@@ -41,6 +41,17 @@ public abstract class GlUtil {
         return out;
     }
 
+    public static void rgba8ToBgr565(ByteBuffer src, ByteBuffer dst, int pixels) {
+        for (int i = 0; i < pixels; i++) {
+            int r = src.get(i * 4) & 0xFF;
+            int g = src.get(i * 4 + 1) & 0xFF;
+            int b = src.get(i * 4 + 2) & 0xFF;
+            int value = ((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3);
+            dst.put(i * 2, (byte) value);
+            dst.put(i * 2 + 1, (byte) (value >>> 8));
+        }
+    }
+
     public static ByteBuffer BGRAtoRGBA_buffer(ByteBuffer in) {
         Validate.isTrue(in.remaining() % 4 == 0, "Unexpected buffer stride");
 
